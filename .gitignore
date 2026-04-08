@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.txt
+failed_json.txt
+output*.txt
+output*.log
+.env
