@@ -115,7 +115,9 @@ def list_tasks():
 
 
 @app.post("/reset")
-def reset(request: ResetRequest):
+def reset(request: Optional[ResetRequest] = None):
+    if request is None:
+        request = ResetRequest()
     env = ClinicalTrialEnv(task_id=request.task_id, seed=request.seed)
     obs = env.reset()
     _envs[request.task_id] = env
