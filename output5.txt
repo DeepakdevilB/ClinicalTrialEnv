@@ -1,0 +1,25 @@
+﻿[START] task=task1 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+[STEP] step=1 action=submit_reports(n=1) reward=1.00 done=true error=+1 correct deviation(s) identified
+[END] success=true steps=1 rewards=1.00
+[START] task=task2 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+  [WARN] JSON parse error: Expecting ',' delimiter: line 1 column 16884 (char 16883). Dumped to failed_json.txt
+[STEP] step=1 action=submit_reports(n=0) reward=0.00 done=false error=4 deviation(s) still undetected
+  [WARN] JSON parse error: Expecting ',' delimiter: line 1 column 16884 (char 16883). Dumped to failed_json.txt
+[STEP] step=2 action=submit_reports(n=0) reward=0.00 done=false error=4 deviation(s) still undetected
+  [WARN] JSON parse error: Expecting ',' delimiter: line 1 column 16884 (char 16883). Dumped to failed_json.txt
+[STEP] step=3 action=submit_reports(n=0) reward=0.00 done=false error=4 deviation(s) still undetected
+  [WARN] JSON parse error: Expecting ',' delimiter: line 1 column 16884 (char 16883). Dumped to failed_json.txt
+[STEP] step=4 action=submit_reports(n=0) reward=0.00 done=false error=4 deviation(s) still undetected
+  [WARN] JSON parse error: Expecting ',' delimiter: line 1 column 16884 (char 16883). Dumped to failed_json.txt
+[STEP] step=5 action=submit_reports(n=0) reward=0.00 done=true error=4 deviation(s) still undetected
+[END] success=false steps=5 rewards=0.00,0.00,0.00,0.00,0.00
+[START] task=task3 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+  [ERROR] LLM call failed: APIStatusError: Error code: 402 - {'error': 'You have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.'}
+[STEP] step=1 action=submit_reports(n=0) reward=0.00 done=true error=7 deviation(s) still undetected
+[END] success=false steps=1 rewards=0.00
+
+--- Baseline Scores ---
+  task1: 1.0000
+  task2: 0.0000
+  task3: 0.0000
+  Mean: 0.3333

@@ -1,0 +1,98 @@
+name: ClinicalTrialEnv
+version: "1.0.0"
+description: >
+  A real-world reinforcement learning environment for clinical trial protocol
+  deviation detection. An AI agent reviews synthetic patient records and
+  trial protocol rules, then reports protocol deviations such as missed visits,
+  wrong doses, late SAE reporting, eligibility violations, and more.
+  
+  The environment is designed to simulate the work of a Clinical Research
+  Coordinator (CRC) performing source data verification and protocol
+  compliance audits — a high-stakes, cognitively demanding real-world task.
+
+tags:
+  - openenv
+  - clinical
+  - healthcare
+  - compliance
+  - text-based
+
+tasks:
+  - id: task1
+    name: Single Deviation Detection
+    difficulty: easy
+    description: >
+      3 patients, exactly 1 protocol deviation (missed visit).
+      A textual hint is provided on the first observation.
+    n_patients: 3
+    n_deviations: 1
+    max_steps: 5
+    reward_range: [-1.0, 1.0]
+
+  - id: task2
+    name: Multi-Patient Audit
+    difficulty: medium
+    description: >
+      5 patients, 4 protocol deviations across different categories:
+      wrong dose, missing required lab, late SAE reporting, and
+      visit out of allowed window. No hints provided.
+    n_patients: 5
+    n_deviations: 4
+    max_steps: 5
+    reward_range: [-1.0, 1.0]
+
+  - id: task3
+    name: Complex Trial Audit with Decoy
+    difficulty: hard
+    description: >
+      8 patients, 7 protocol deviations including critical eligibility
+      violations (inclusion/exclusion criteria), overdose, late SAE,
+      and cascading effects. One additional patient has borderline lab
+      values that look suspicious but do not constitute a real deviation —
+      designed to elicit false positives. No hints provided.
+    n_patients: 8
+    n_deviations: 7
+    max_steps: 5
+    reward_range: [-1.0, 1.0]
+
+observation_space:
+  type: structured_text
+  description: >
+    JSON-serialized Observation object containing:
+    - task_id, step number
+    - protocol rules (visit windows, doses, lab requirements, SAE deadlines)
+    - list of PatientRecord objects (visit schedule, adverse events, labs, dosing)
+    - action_history (prior step summaries)
+    - optional hint (task1 only, step 0 only)
+
+action_space:
+  type: structured_json
+  description: >
+    JSON Action object containing:
+    - reports: list of DeviationReport objects
+      - patient_id, deviation_type, details, severity
+    - submit: bool (True = finalise episode)
+    - reasoning: optional chain-of-thought string (not graded)
+
+reward:
+  type: incremental_weighted_f1
+  description: >
+    Each correctly identified deviation earns partial reward proportional
+    to its severity weight (critical=2x, major=1.5x, minor=1x).
+    Each false positive incurs a -0.15 penalty.
+    Final score on submit = weighted recall of all deviations found.
+    Range: [-1.0, 1.0] per step; [0.0, 1.0] as final episode score.
+
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  health: GET /health
+  tasks: GET /tasks
+
+runtime:
+  base_url: http://localhost:7860
+  max_steps_per_episode: 5
+  estimated_inference_time_minutes: 5
+  vcpu: 2
+  memory_gb: 8

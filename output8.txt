@@ -1,0 +1,15 @@
+﻿[START] task=task1 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+[STEP] step=1 action=submit_reports(n=4) reward=1.00 done=true error=+1 correct deviation(s) identified; 3 false positive(s) ù penalty applied
+[END] success=true steps=1 rewards=1.00
+[START] task=task2 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+[STEP] step=1 action=submit_reports(n=23) reward=0.55 done=true error=+2 correct deviation(s) identified; 17 false positive(s) ù penalty applied; 2 deviation(s) still undetected
+[END] success=true steps=1 rewards=0.55
+[START] task=task3 env=clinical_trial model=meta-llama/Llama-3.1-8B-Instruct
+[STEP] step=1 action=submit_reports(n=46) reward=0.09 done=true error=+1 correct deviation(s) identified; 40 false positive(s) ù penalty applied; 6 deviation(s) still undetected
+[END] success=false steps=1 rewards=0.09
+
+--- Baseline Scores ---
+  task1: 1.0000
+  task2: 0.5455
+  task3: 0.0870
+  Mean: 0.5442

@@ -1,0 +1,18 @@
+﻿[START] task=task1 env=clinical_trial model=gpt-4o
+  [ERROR] LLM call failed: NotFoundError: Error code: 404 - {'error': {'type': 'invalid_request_error', 'code': 'DeploymentNotFound', 'message': 'The API deployment for this resource does not exist. If you created the deployment within the last 5 minutes, please wait a moment and try again.'}}
+[STEP] step=1 action=submit_reports(n=0) reward=0.00 done=true error=1 deviation(s) still undetected
+[END] success=false steps=1 rewards=0.00
+[START] task=task2 env=clinical_trial model=gpt-4o
+  [ERROR] LLM call failed: NotFoundError: Error code: 404 - {'error': {'type': 'invalid_request_error', 'code': 'DeploymentNotFound', 'message': 'The API deployment for this resource does not exist. If you created the deployment within the last 5 minutes, please wait a moment and try again.'}}
+[STEP] step=1 action=submit_reports(n=0) reward=0.00 done=true error=4 deviation(s) still undetected
+[END] success=false steps=1 rewards=0.00
+[START] task=task3 env=clinical_trial model=gpt-4o
+  [ERROR] LLM call failed: NotFoundError: Error code: 404 - {'error': {'type': 'invalid_request_error', 'code': 'DeploymentNotFound', 'message': 'The API deployment for this resource does not exist. If you created the deployment within the last 5 minutes, please wait a moment and try again.'}}
+[STEP] step=1 action=submit_reports(n=0) reward=0.00 done=true error=7 deviation(s) still undetected
+[END] success=false steps=1 rewards=0.00
+
+--- Baseline Scores ---
+  task1: 0.0000
+  task2: 0.0000
+  task3: 0.0000
+  Mean: 0.0000
