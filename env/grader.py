@@ -19,13 +19,14 @@ SEVERITY_WEIGHTS = {
 
 FALSE_POSITIVE_PENALTY = 0.15   # per false positive report
 
-# Validator requires scores strictly inside (0, 1) — never 0.0 or 1.0
-_SCORE_MIN = 0.001
-_SCORE_MAX = 0.999
+# Validator requires scores strictly inside (0, 1) — never 0.0 or 1.0.
+# Bounds are 0.01/0.99 so they print correctly as "0.01"/"0.99" with :.2f formatting.
+_SCORE_MIN = 0.01
+_SCORE_MAX = 0.99
 
 
 def _clamp(value: float) -> float:
-    """Clamp a score to the open interval (0.001, 0.999)."""
+    """Clamp a score to the open interval (0.01, 0.99)."""
     return round(max(_SCORE_MIN, min(_SCORE_MAX, value)), 4)
 
 

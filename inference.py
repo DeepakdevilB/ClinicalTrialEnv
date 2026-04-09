@@ -214,7 +214,7 @@ def run_episode(task_id: str) -> float:
 
             print(
                 f"[STEP] step={step} action={action_str} "
-                f"reward={reward:.2f} done={str(done).lower()} "
+                f"reward={reward:.4f} done={str(done).lower()} "
                 f"error={error_msg}",
                 flush=True,
             )
@@ -224,16 +224,16 @@ def run_episode(task_id: str) -> float:
                 break
 
         success     = final_reward >= 0.5
-        rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+        rewards_str = ",".join(f"{r:.4f}" for r in rewards)
         print(f"[END] success={str(success).lower()} steps={step} rewards={rewards_str}", flush=True)
         return final_reward
 
     except Exception as exc:
         error_str   = str(exc).replace("\n", " ")
-        rewards_str = ",".join(f"{r:.2f}" for r in rewards) if rewards else "0.00"
-        print(f"[STEP] step={step} action=error reward=0.00 done=true error={error_str}", flush=True)
+        rewards_str = ",".join(f"{r:.4f}" for r in rewards) if rewards else "0.01"
+        print(f"[STEP] step={step} action=error reward=0.01 done=true error={error_str}", flush=True)
         print(f"[END] success=false steps={step} rewards={rewards_str}", flush=True)
-        return 0.0
+        return 0.01
 
 
 # ---------------------------------------------------------------------------
