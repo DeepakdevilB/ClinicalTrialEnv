@@ -1,7 +1,7 @@
 """
 inference.py — Baseline inference script for ClinicalTrialEnv.
 
-Uses the OpenAI API client to run an LLM agent through each task.
+Uses plain HTTP requests (no openai SDK) to call any OpenAI-compatible API.
 Emits structured [START] / [STEP] / [END] logs to stdout.
 
 Environment variables:
@@ -12,10 +12,10 @@ Environment variables:
 """
 
 import os
+import re
 import sys
 import json
 import requests
-from openai import OpenAI, AzureOpenAI
 
 # ---------------------------------------------------------------------------
 # Environment variables
@@ -23,45 +23,23 @@ from openai import OpenAI, AzureOpenAI
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1").rstrip("/")
 MODEL_NAME   = os.getenv("MODEL_NAME",   "meta-llama/Llama-3.1-8B-Instruct")
 ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860").rstrip("/")
+HF_TOKEN     = os.getenv("HF_TOKEN", "")
 
-AZURE_OPENAI_API_KEY     = os.getenv("AZURE_OPENAI_API_KEY")
-AZURE_OPENAI_ENDPOINT    = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+TASKS     = ["task1", "task2", "task3"]
+MAX_STEPS = 5
 
-
-def _build_client():
-    """Build the LLM client from environment variables.
-
-    Wrapped in a function so that any constructor error is catchable
-    and never crashes the script at import / module level.
-    """
-    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-        return AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        )
-
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        raise ValueError(
-            "Either HF_TOKEN or (AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT) "
-            "must be set in environment variables."
-        )
-    return OpenAI(base_url=API_BASE_URL, api_key=hf_token)
-
-
-try:
-    client = _build_client()
-except Exception as _client_err:
-    # Print a structured error and exit so the validator sees a clean [END] line.
-    print(f"[ERROR] Failed to initialise LLM client: {type(_client_err).__name__}: {_client_err}", flush=True)
+# ---------------------------------------------------------------------------
+# Validate token early — exit cleanly instead of crashing mid-run
+# ---------------------------------------------------------------------------
+if not HF_TOKEN:
+    print("[ERROR] HF_TOKEN environment variable is not set.", flush=True)
     print("[END] success=false steps=0 rewards=0.00", flush=True)
     sys.exit(1)
 
-TASKS = ["task1", "task2", "task3"]
-MAX_STEPS = 5
-
+LLM_HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}",
+    "Content-Type": "application/json",
+}
 
 # ---------------------------------------------------------------------------
 # Prompt builder — compact version to fit small context windows
@@ -88,29 +66,29 @@ If no deviations found: {"reasoning": "No deviations found.", "reports":[],"subm
 def build_user_prompt(obs: dict, step: int) -> str:
     """Build a compact prompt — strip action_history and hint to save tokens."""
     protocol = obs.get("protocol", {})
-    patients = obs.get("patients", [])
-    hint = obs.get("hint", "")
+    patients  = obs.get("patients", [])
+    hint      = obs.get("hint", "")
 
     compact = {
         "task_id": obs.get("task_id"),
         "step": step,
         "hint": hint,
         "protocol": {
-            "visit_window_days": protocol.get("visit_window_days"),
-            "dose_per_visit_mg": protocol.get("dose_per_visit_mg"),
-            "max_dose_mg_per_day": protocol.get("max_dose_mg_per_day"),
-            "required_labs": protocol.get("required_labs"),
-            "sae_reporting_window_hours": protocol.get("sae_reporting_window_hours"),
+            "visit_window_days":         protocol.get("visit_window_days"),
+            "dose_per_visit_mg":         protocol.get("dose_per_visit_mg"),
+            "max_dose_mg_per_day":       protocol.get("max_dose_mg_per_day"),
+            "required_labs":             protocol.get("required_labs"),
+            "sae_reporting_window_hours":protocol.get("sae_reporting_window_hours"),
         },
-        "patients": []
+        "patients": [],
     }
 
     for p in patients:
         compact["patients"].append({
-            "patient_id": p["patient_id"],
-            "visit_schedule": p["visit_schedule"],
-            "adverse_events": p["adverse_events"],
-            "dosing_records": p["dosing_records"],
+            "patient_id":       p["patient_id"],
+            "visit_schedule":   p["visit_schedule"],
+            "adverse_events":   p["adverse_events"],
+            "dosing_records":   p["dosing_records"],
             "inclusion_criteria": p["inclusion_criteria"],
             "exclusion_criteria": p["exclusion_criteria"],
             "lab_results_summary": [
@@ -120,6 +98,76 @@ def build_user_prompt(obs: dict, step: int) -> str:
         })
 
     return f"Step {step} — audit these patients:\n\n{json.dumps(compact, separators=(',', ':'))}"
+
+
+# ---------------------------------------------------------------------------
+# LLM call — plain HTTP, no SDK
+# ---------------------------------------------------------------------------
+
+def call_llm(obs: dict, step: int) -> dict:
+    """POST to the OpenAI-compatible /chat/completions endpoint via requests."""
+    user_msg = build_user_prompt(obs, step)
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": user_msg},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 2000,
+    }
+
+    content = ""
+    try:
+        resp = requests.post(
+            f"{API_BASE_URL}/chat/completions",
+            headers=LLM_HEADERS,
+            json=payload,
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data    = resp.json()
+        content = data["choices"][0]["message"]["content"].strip()
+
+        # Strip markdown fences if present
+        if "```" in content:
+            parts = content.split("```")
+            for part in parts:
+                part = part.strip()
+                if part.startswith("json"):
+                    part = part[4:].strip()
+                if part.startswith("{"):
+                    content = part
+                    break
+
+        # Extract first { ... } block
+        start = content.find("{")
+        end   = content.rfind("}") + 1
+        if start != -1 and end > start:
+            content = content[start:end]
+
+        # Fix trailing commas
+        content = re.sub(r',\s*([\]}])', r'\1', content)
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Crop to last complete object
+            end_bracket = content.rfind("}")
+            if end_bracket != -1:
+                cropped = content[:end_bracket + 1] + '], "submit": true}'
+                try:
+                    return json.loads(cropped)
+                except Exception:
+                    pass
+            raise
+
+    except json.JSONDecodeError as je:
+        print(f"  [WARN] JSON parse error: {je}", flush=True)
+        return {"reports": [], "submit": False, "reasoning": "JSON parse error — retrying."}
+    except Exception as e:
+        print(f"  [ERROR] LLM call failed: {type(e).__name__}: {e}", flush=True)
+        return {"reports": [], "submit": True, "reasoning": f"LLM error: {e}"}
 
 
 # ---------------------------------------------------------------------------
@@ -139,94 +187,27 @@ def env_step(task_id: str, action: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# LLM call with JSON repair
-# ---------------------------------------------------------------------------
-
-def call_llm(obs: dict, step: int) -> dict:
-    """Call the LLM and parse its JSON action."""
-    user_msg = build_user_prompt(obs, step)
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": user_msg},
-            ],
-            temperature=0.1,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content.strip()
-
-        # Strip markdown fences if present
-        if "```" in content:
-            parts = content.split("```")
-            for part in parts:
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    content = part
-                    break
-
-        import re
-
-        # Find the first { ... } block in case model adds preamble
-        start = content.find("{")
-        end   = content.rfind("}") + 1
-        if start != -1 and end > start:
-            content = content[start:end]
-
-        # Fix trailing commas
-        content = re.sub(r',\s*([\]}])', r'\1', content)
-
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            # Re-attempt parsing by cropping at the last complete deviation object
-            end_bracket = content.rfind("}")
-            if end_bracket != -1:
-                cropped = content[:end_bracket + 1] + '], "submit": true}'
-                try:
-                    return json.loads(cropped)
-                except Exception:
-                    pass
-            raise  # Re-raise if fallback fails
-
-    except json.JSONDecodeError as je:
-        with open("failed_json.txt", "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"  [WARN] JSON parse error: {je}. Dumped to failed_json.txt", flush=True)
-        return {"reports": [], "submit": False, "reasoning": "JSON parse error — retrying."}
-    except Exception as e:
-        print(f"  [ERROR] LLM call failed: {type(e).__name__}: {e}", flush=True)
-        return {"reports": [], "submit": True, "reasoning": f"LLM error: {e}"}
-
-
-# ---------------------------------------------------------------------------
 # Episode runner
 # ---------------------------------------------------------------------------
 
 def run_episode(task_id: str) -> float:
-    obs = env_reset(task_id)
-    step = 0
-    rewards = []
+    obs          = env_reset(task_id)
+    step         = 0
+    rewards      = []
     final_reward = 0.0
 
-    print(f"[START] task={task_id} env=clinical_trial model={MODEL_NAME}")
-    sys.stdout.flush()
+    print(f"[START] task={task_id} env=clinical_trial model={MODEL_NAME}", flush=True)
 
     try:
         for step in range(1, MAX_STEPS + 1):
             action = call_llm(obs, step)
             result = env_step(task_id, action)
 
-            reward = result["reward"]
-            done   = result["done"]
-            info   = result.get("info", {})
-            obs    = result["observation"]
-
-            error_msg = info.get("message", "null") or "null"
-            error_str = error_msg.replace("\n", " ")
+            reward    = result["reward"]
+            done      = result["done"]
+            info      = result.get("info", {})
+            obs       = result["observation"]
+            error_msg = (info.get("message") or "null").replace("\n", " ")
 
             action_str = f"submit_reports(n={len(action.get('reports', []))})"
             rewards.append(reward)
@@ -234,26 +215,24 @@ def run_episode(task_id: str) -> float:
             print(
                 f"[STEP] step={step} action={action_str} "
                 f"reward={reward:.2f} done={str(done).lower()} "
-                f"error={error_str}"
+                f"error={error_msg}",
+                flush=True,
             )
-            sys.stdout.flush()
 
             if done:
                 final_reward = reward
                 break
 
-        success = final_reward >= 0.5
+        success     = final_reward >= 0.5
         rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-        print(f"[END] success={str(success).lower()} steps={step} rewards={rewards_str}")
-        sys.stdout.flush()
+        print(f"[END] success={str(success).lower()} steps={step} rewards={rewards_str}", flush=True)
         return final_reward
 
     except Exception as exc:
-        error_str = str(exc).replace("\n", " ")
+        error_str   = str(exc).replace("\n", " ")
         rewards_str = ",".join(f"{r:.2f}" for r in rewards) if rewards else "0.00"
-        print(f"[STEP] step={step} action=error reward=0.00 done=true error={error_str}")
-        print(f"[END] success=false steps={step} rewards={rewards_str}")
-        sys.stdout.flush()
+        print(f"[STEP] step={step} action=error reward=0.00 done=true error={error_str}", flush=True)
+        print(f"[END] success=false steps={step} rewards={rewards_str}", flush=True)
         return 0.0
 
 
