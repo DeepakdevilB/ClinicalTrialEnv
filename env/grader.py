@@ -19,6 +19,15 @@ SEVERITY_WEIGHTS = {
 
 FALSE_POSITIVE_PENALTY = 0.15   # per false positive report
 
+# Validator requires scores strictly inside (0, 1) — never 0.0 or 1.0
+_SCORE_MIN = 0.001
+_SCORE_MAX = 0.999
+
+
+def _clamp(value: float) -> float:
+    """Clamp a score to the open interval (0.001, 0.999)."""
+    return round(max(_SCORE_MIN, min(_SCORE_MAX, value)), 4)
+
 
 def grade_action(
     action: Action,
@@ -65,7 +74,7 @@ def grade_action(
     precision = tp_weighted / max(tp_weighted + new_fp, 1e-9)
     recall = tp_weighted / max(total_gt_weight, 1e-9)
     f1 = 2 * precision * recall / max(precision + recall, 1e-9)
-    f1 = max(0.0, min(1.0, f1 - fp_penalty))
+    f1 = _clamp(f1 - fp_penalty)
 
     # Step-level reward: incremental gain from new true positives minus penalty
     new_tp_weight = sum(
@@ -74,7 +83,7 @@ def grade_action(
         if k not in previous_found and k in gt_keys
     )
     step_reward = (new_tp_weight / max(total_gt_weight, 1e-9)) - fp_penalty
-    step_reward = max(-1.0, min(1.0, step_reward))
+    step_reward = _clamp(step_reward)
 
     info = StepInfo(
         true_positives=len(matched_gt_keys),
@@ -101,7 +110,7 @@ def final_score(ground_truth: list[dict], found_keys: set[str]) -> float:
         for d in ground_truth
         if _deviation_key(d) in found_keys
     )
-    return round(found_weight / max(total_weight, 1e-9), 4)
+    return _clamp(found_weight / max(total_weight, 1e-9))
 
 
 def _deviation_key(d: dict) -> str:
