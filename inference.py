@@ -20,25 +20,44 @@ from openai import OpenAI, AzureOpenAI
 # ---------------------------------------------------------------------------
 # Environment variables
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1").rstrip("/")
 MODEL_NAME   = os.getenv("MODEL_NAME",   "meta-llama/Llama-3.1-8B-Instruct")
-ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860").rstrip("/")
 
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_KEY     = os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_ENDPOINT    = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
-if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-    client = AzureOpenAI(
-        api_key=AZURE_OPENAI_API_KEY,
-        api_version=AZURE_OPENAI_API_VERSION,
-        azure_endpoint=AZURE_OPENAI_ENDPOINT
-    )
-else:
-    HF_TOKEN = os.getenv("HF_TOKEN")
-    if HF_TOKEN is None:
-        raise ValueError("Either HF_TOKEN or (AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT) must be securely provided in environment.")
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+
+def _build_client():
+    """Build the LLM client from environment variables.
+
+    Wrapped in a function so that any constructor error is catchable
+    and never crashes the script at import / module level.
+    """
+    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
+        return AzureOpenAI(
+            api_key=AZURE_OPENAI_API_KEY,
+            api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        )
+
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        raise ValueError(
+            "Either HF_TOKEN or (AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT) "
+            "must be set in environment variables."
+        )
+    return OpenAI(base_url=API_BASE_URL, api_key=hf_token)
+
+
+try:
+    client = _build_client()
+except Exception as _client_err:
+    # Print a structured error and exit so the validator sees a clean [END] line.
+    print(f"[ERROR] Failed to initialise LLM client: {type(_client_err).__name__}: {_client_err}", flush=True)
+    print("[END] success=false steps=0 rewards=0.00", flush=True)
+    sys.exit(1)
 
 TASKS = ["task1", "task2", "task3"]
 MAX_STEPS = 5
