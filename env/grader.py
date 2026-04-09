@@ -5,7 +5,7 @@ Scoring philosophy:
 - Each correctly identified deviation earns partial credit.
 - Each false positive (hallucinated deviation) incurs a penalty.
 - Critical deviations (SAE, eligibility) are weighted 2x.
-- Final score = weighted F1 in [0.0, 1.0].
+- Final score uses Laplace smoothing to stay strictly in (0, 1).
 - Step rewards are incremental: each new true positive in a step earns +delta.
 """
 
@@ -19,15 +19,19 @@ SEVERITY_WEIGHTS = {
 
 FALSE_POSITIVE_PENALTY = 0.15   # per false positive report
 
-# Validator requires scores strictly inside (0, 1) — never 0.0 or 1.0.
-# Bounds are 0.01/0.99 so they print correctly as "0.01"/"0.99" with :.2f formatting.
-_SCORE_MIN = 0.01
-_SCORE_MAX = 0.99
+# Laplace smoothing constant — keeps final_score strictly inside (0, 1)
+# even when the agent finds all deviations (1.0 → just under 1) or none (0.0 → just above 0).
+_ALPHA = 0.5
 
 
-def _clamp(value: float) -> float:
-    """Clamp a score to the open interval (0.01, 0.99)."""
-    return round(max(_SCORE_MIN, min(_SCORE_MAX, value)), 4)
+def _laplace_score(numerator: float, denominator: float) -> float:
+    """
+    Compute a Laplace-smoothed ratio: (num + alpha) / (den + 2*alpha).
+
+    This maps [0, 1] to (alpha/(den+2a), (den+alpha)/(den+2a)),
+    which is always strictly inside (0, 1) for any alpha > 0.
+    """
+    return round((numerator + _ALPHA) / (denominator + 2 * _ALPHA), 4)
 
 
 def grade_action(
@@ -39,7 +43,7 @@ def grade_action(
     Compare agent's reports against ground truth.
 
     Returns:
-        step_reward: float in [-1, 1] for this step only
+        step_reward: float in (0, 1) for this step only
         info: StepInfo with precision/recall/F1 and explanation
         updated_found: set of deviation keys found so far
     """
@@ -69,22 +73,21 @@ def grade_action(
     total_gt_weight = sum(
         SEVERITY_WEIGHTS.get(d["severity"], 1.0) for d in ground_truth
     )
-    total_reported = len(action.reports)
     fp_penalty = new_fp * FALSE_POSITIVE_PENALTY
 
     precision = tp_weighted / max(tp_weighted + new_fp, 1e-9)
-    recall = tp_weighted / max(total_gt_weight, 1e-9)
-    f1 = 2 * precision * recall / max(precision + recall, 1e-9)
-    f1 = _clamp(f1 - fp_penalty)
+    recall    = tp_weighted / max(total_gt_weight, 1e-9)
+    f1        = 2 * precision * recall / max(precision + recall, 1e-9)
+    f1        = max(0.0, min(1.0, f1 - fp_penalty))
 
-    # Step-level reward: incremental gain from new true positives minus penalty
+    # Step-level reward: Laplace-smoothed incremental gain
     new_tp_weight = sum(
         SEVERITY_WEIGHTS.get(gt_keys[k]["severity"], 1.0)
         for k in matched_gt_keys
         if k not in previous_found and k in gt_keys
     )
-    step_reward = (new_tp_weight / max(total_gt_weight, 1e-9)) - fp_penalty
-    step_reward = _clamp(step_reward)
+    raw_step = (new_tp_weight / max(total_gt_weight, 1e-9)) - fp_penalty
+    step_reward = _laplace_score(max(0.0, raw_step), 1.0)
 
     info = StepInfo(
         true_positives=len(matched_gt_keys),
@@ -102,16 +105,19 @@ def grade_action(
 
 def final_score(ground_truth: list[dict], found_keys: set[str]) -> float:
     """
-    Compute final episode score (0.0 – 1.0) based on deviations found.
+    Compute final episode score strictly in (0, 1) using Laplace smoothing.
+
+    Raw weighted recall is smoothed by alpha so that:
+      - Finding nothing   → alpha / (total + 2*alpha)   > 0.0
+      - Finding everything → (total + alpha) / (total + 2*alpha) < 1.0
     """
-    gt_keys = {_deviation_key(d) for d in ground_truth}
     total_weight = sum(SEVERITY_WEIGHTS.get(d["severity"], 1.0) for d in ground_truth)
     found_weight = sum(
         SEVERITY_WEIGHTS.get(d["severity"], 1.0)
         for d in ground_truth
         if _deviation_key(d) in found_keys
     )
-    return _clamp(found_weight / max(total_weight, 1e-9))
+    return _laplace_score(found_weight, total_weight)
 
 
 def _deviation_key(d: dict) -> str:

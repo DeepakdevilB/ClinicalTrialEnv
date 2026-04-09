@@ -20,8 +20,10 @@ import requests
 # ---------------------------------------------------------------------------
 # Environment variables
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1").rstrip("/")
-MODEL_NAME   = os.getenv("MODEL_NAME",   "meta-llama/Llama-3.1-8B-Instruct")
+# NOTE: defaults must include 'https://api.openai.com/v1' and 'gpt-4.1-mini'
+# as the validate.py pre-submission script asserts their presence.
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+MODEL_NAME   = os.getenv("MODEL_NAME",   "gpt-4.1-mini")
 ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860").rstrip("/")
 HF_TOKEN     = os.getenv("HF_TOKEN", "")
 
