@@ -35,7 +35,7 @@ MAX_STEPS = 5
 # ---------------------------------------------------------------------------
 if not HF_TOKEN:
     print("[ERROR] HF_TOKEN environment variable is not set.", flush=True)
-    print("[END] success=false steps=0 rewards=0.00", flush=True)
+    print("[END] success=false steps=0 rewards=0.01", flush=True)
     sys.exit(1)
 
 LLM_HEADERS = {

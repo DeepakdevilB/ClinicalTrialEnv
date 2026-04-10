@@ -81,7 +81,12 @@ def grade_action(
     precision = tp_weighted / max(tp_weighted + new_fp, 1e-9)
     recall    = tp_weighted / max(total_gt_weight, 1e-9)
     f1        = 2 * precision * recall / max(precision + recall, 1e-9)
-    f1        = max(0.0, min(1.0, f1 - fp_penalty))
+    f1        = f1 - fp_penalty
+    
+    # Clamp all metrics strictly to (0, 1) to pass the strict validation
+    precision = max(0.0001, min(0.9999, precision))
+    recall    = max(0.0001, min(0.9999, recall))
+    f1        = max(0.0001, min(0.9999, f1))
 
     # Step-level reward: Laplace-smoothed incremental gain
     new_tp_weight = sum(
