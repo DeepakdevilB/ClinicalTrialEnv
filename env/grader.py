@@ -31,7 +31,10 @@ def _laplace_score(numerator: float, denominator: float) -> float:
     This maps [0, 1] to (alpha/(den+2a), (den+alpha)/(den+2a)),
     which is always strictly inside (0, 1) for any alpha > 0.
     """
-    return round((numerator + _ALPHA) / (denominator + 2 * _ALPHA), 4)
+    raw = (numerator + _ALPHA) / (denominator + 2 * _ALPHA)
+    # Clamp strictly to (0, 1) — validator rejects 0.0 and 1.0 exactly
+    raw = max(1e-4, min(1 - 1e-4, raw))
+    return round(raw, 4)
 
 
 def grade_action(

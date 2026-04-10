@@ -196,7 +196,7 @@ def run_episode(task_id: str) -> float:
     obs          = env_reset(task_id)
     step         = 0
     rewards      = []
-    final_reward = 0.0
+    final_reward = 0.01  # safe fallback — must be strictly > 0.0 per validator
 
     print(f"[START] task={task_id} env=clinical_trial model={MODEL_NAME}", flush=True)
 
@@ -224,6 +224,13 @@ def run_episode(task_id: str) -> float:
             if done:
                 final_reward = reward
                 break
+
+        # If loop exhausted without done=True, use the last received reward
+        # (clamped to valid range) to avoid returning the 0.01 placeholder.
+        if not done and rewards:
+            last = rewards[-1]
+            # Clamp to strictly (0, 1) — validator rejects 0.0 and 1.0 exactly
+            final_reward = max(0.0001, min(0.9999, last))
 
         success     = final_reward >= 0.5
         rewards_str = ",".join(f"{r:.4f}" for r in rewards)
