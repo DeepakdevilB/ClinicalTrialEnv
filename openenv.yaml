@@ -27,7 +27,7 @@ tasks:
     n_patients: 3
     n_deviations: 1
     max_steps: 5
-    reward_range: [-1.0, 1.0]
+    reward_range: [0.0001, 0.9999]
 
   - id: task2
     name: Multi-Patient Audit
@@ -39,7 +39,7 @@ tasks:
     n_patients: 5
     n_deviations: 4
     max_steps: 5
-    reward_range: [-1.0, 1.0]
+    reward_range: [0.0001, 0.9999]
 
   - id: task3
     name: Complex Trial Audit with Decoy
@@ -53,7 +53,7 @@ tasks:
     n_patients: 8
     n_deviations: 7
     max_steps: 5
-    reward_range: [-1.0, 1.0]
+    reward_range: [0.0001, 0.9999]
 
 observation_space:
   type: structured_text
@@ -81,7 +81,7 @@ reward:
     to its severity weight (critical=2x, major=1.5x, minor=1x).
     Each false positive incurs a -0.15 penalty.
     Final score on submit = weighted recall of all deviations found.
-    Range: [-1.0, 1.0] per step; [0.0, 1.0] as final episode score.
+    Range: (0.0, 1.0) strictly (enforced by Laplace smoothing and clamping).
 
 endpoints:
   reset: POST /reset
