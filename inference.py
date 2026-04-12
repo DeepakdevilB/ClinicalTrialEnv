@@ -222,7 +222,7 @@ def run_episode(task_id: str) -> float:
             )
 
             if done:
-                final_reward = reward
+                final_reward = max(0.0001, min(0.9999, reward))
                 break
 
         # If loop exhausted without done=True, use the last received reward
